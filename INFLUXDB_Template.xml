@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>4.4</version>
+    <date>2020-02-16T11:23:50Z</date>
+    <groups>
+        <group>
+            <name>Templates/Databases</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>Template InfluxDB</template>
+            <name>Template InfluxDB</name>
+            <description>Мониторинг своевременного обновления данных в базе InfluxDB</description>
+            <groups>
+                <group>
+                    <name>Templates/Databases</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>InfluxDB DataCheck</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>InfluxDB DataCheck 1m get last insert</name>
+                    <type>HTTP_AGENT</type>
+                    <key>influxdb.1m.last_update</key>
+                    <delay>1m;1m/1-7,09:30-23:55</delay>
+                    <history>5d</history>
+                    <trends>10d</trends>
+                    <units>unixtime</units>
+                    <applications>
+                        <application>
+                            <name>InfluxDB DataCheck</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <params>$.results[0].series[0].values[0][0]</params>
+                        </step>
+                    </preprocessing>
+                    <timeout>10s</timeout>
+                    <url>http://{HOST.CONN}:{$INFLUXDB.PORT}/query</url>
+                    <query_fields>
+                        <query_field>
+                            <name>q</name>
+                            <value>SELECT time,d from {$INFLUXDB.DBNAME}.autogen.1m where time &gt;= now() - 7d and time &lt;= now() order by time desc limit 1</value>
+                        </query_field>
+                        <query_field>
+                            <name>pretty</name>
+                            <value>{$INFLUXDB.PRETTY}</value>
+                        </query_field>
+                        <query_field>
+                            <name>epoch</name>
+                            <value>{$INFLUXDB.EPOCH}</value>
+                        </query_field>
+                    </query_fields>
+                    <follow_redirects>NO</follow_redirects>
+                    <triggers>
+                        <trigger>
+                            <expression>{fuzzytime({$DATA.1M.TIMEOUT})}=0</expression>
+                            <name>InfluxDB Candles: 1m delay trigger</name>
+                            <priority>HIGH</priority>
+                            <dependencies>
+                                <dependency>
+                                    <name>InfluxDB Holiday Activated</name>
+                                    <expression>{Template InfluxDB:influxdb.holiday.last()}</expression>
+                                </dependency>
+                            </dependencies>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>InfluxDB DataCheck 5m get last insert</name>
+                    <type>HTTP_AGENT</type>
+                    <key>influxdb.5m.last_update</key>
+                    <delay>1m;wd1-5h9-23</delay>
+                    <history>5d</history>
+                    <trends>10d</trends>
+                    <units>unixtime</units>
+                    <applications>
+                        <application>
+                            <name>InfluxDB DataCheck</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <params>$.results[0].series[0].values[0][0]</params>
+                        </step>
+                    </preprocessing>
+                    <timeout>10s</timeout>
+                    <url>http://{HOST.CONN}:{$INFLUXDB.PORT}/query</url>
+                    <query_fields>
+                        <query_field>
+                            <name>q</name>
+                            <value>SELECT time,d from {$INFLUXDB.DBNAME}.autogen.5m where time &gt;= now() - 7d and time &lt;= now() order by time desc limit 1</value>
+                        </query_field>
+                        <query_field>
+                            <name>pretty</name>
+                            <value>{$INFLUXDB.PRETTY}</value>
+                        </query_field>
+                        <query_field>
+                            <name>epoch</name>
+                            <value>{$INFLUXDB.EPOCH}</value>
+                        </query_field>
+                    </query_fields>
+                    <follow_redirects>NO</follow_redirects>
+                    <triggers>
+                        <trigger>
+                            <expression>{fuzzytime({$DATA.5M.TIMEOUT})}=0</expression>
+                            <name>InfluxDB Candles: 5m delay trigger</name>
+                            <priority>HIGH</priority>
+                            <dependencies>
+                                <dependency>
+                                    <name>InfluxDB Holiday Activated</name>
+                                    <expression>{Template InfluxDB:influxdb.holiday.last()}</expression>
+                                </dependency>
+                            </dependencies>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Today is a holiday</name>
+                    <type>CALCULATED</type>
+                    <key>influxdb.holiday</key>
+                    <history>1h</history>
+                    <trends>0</trends>
+                    <params>date(system.localtime)={$HOLIDAY_DATE}</params>
+                    <applications>
+                        <application>
+                            <name>InfluxDB DataCheck</name>
+                        </application>
+                    </applications>
+                    <triggers>
+                        <trigger>
+                            <expression>{last()}</expression>
+                            <name>InfluxDB Holiday Activated</name>
+                            <opdata>If Fired - all dependent triggers are disabled</opdata>
+                            <priority>INFO</priority>
+                            <description>Включен режим выходного дня для отключения проверки сервисов</description>
+                        </trigger>
+                    </triggers>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$DATA.1M.TIMEOUT}</macro>
+                    <value>150</value>
+                    <description>Разрешённая задержка обновления для 1м графиков</description>
+                </macro>
+                <macro>
+                    <macro>{$DATA.5M.TIMEOUT}</macro>
+                    <value>360</value>
+                    <description>Разрешённая задержка обновления для 5м графиков</description>
+                </macro>
+                <macro>
+                    <macro>{$INFLUXDB.DBNAME}</macro>
+                    <value>testdb</value>
+                </macro>
+                <macro>
+                    <macro>{$INFLUXDB.EPOCH}</macro>
+                    <value>s</value>
+                </macro>
+                <macro>
+                    <macro>{$INFLUXDB.HOST}</macro>
+                    <value>localhost</value>
+                </macro>
+                <macro>
+                    <macro>{$INFLUXDB.PORT}</macro>
+                    <value>8086</value>
+                </macro>
+                <macro>
+                    <macro>{$INFLUXDB.PRETTY}</macro>
+                    <value>false</value>
+                </macro>
+            </macros>
+        </template>
+    </templates>
+</zabbix_export>

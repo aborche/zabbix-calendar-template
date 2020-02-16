@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>4.4</version>
+    <date>2020-02-16T12:10:04Z</date>
+    <groups>
+        <group>
+            <name>Templates</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>Template Zabbix Holidays Controller</template>
+            <name>Template Zabbix Holidays Controller</name>
+            <groups>
+                <group>
+                    <name>Templates</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>Holidays</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>Holiday Date fetch by HTTP</name>
+                    <type>HTTP_AGENT</type>
+                    <key>holiday.date.by.http</key>
+                    <history>5d</history>
+                    <trends>0</trends>
+                    <applications>
+                        <application>
+                            <name>Holidays</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <params>$.date</params>
+                        </step>
+                    </preprocessing>
+                    <url>{$DATEURL}</url>
+                </item>
+                <item>
+                    <name>Global Holiday Date retrieve Job</name>
+                    <type>HTTP_AGENT</type>
+                    <key>holiday.get.job.result</key>
+                    <delay>1h</delay>
+                    <history>1d</history>
+                    <trends>0</trends>
+                    <applications>
+                        <application>
+                            <name>Holidays</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>JAVASCRIPT</type>
+                            <params>//Zabbix.Log(2, 'Date Update request value='+value);
+var authtoken = '';
+var globalmacroid = -1;
+
+var req = new CurlHttpRequest();
+req.AddHeader('Content-Type: application/json');
+resp = req.Post(&quot;{$DATEURL}&quot;, '{}');
+var holidaydate = JSON.parse(resp).date;
+
+Zabbix.Log(2, 'Found new holiday date='+holidaydate);
+
+resp = req.Post(&quot;{$JSONRPC}&quot;, '{&quot;jsonrpc&quot;: &quot;2.0&quot;,&quot;method&quot;: &quot;user.login&quot;,&quot;params&quot;: {&quot;user&quot;: &quot;Calendar&quot;,&quot;password&quot;: &quot;Calendar1234&quot;},&quot;id&quot;: 1}');
+
+// Получение токена авторизации
+
+if (req.Status() == 200) {
+	jv = JSON.parse(resp);
+	if (jv.result)
+	   authtoken= jv.result;
+	else
+	   return 0;
+}
+else
+    return 0;
+
+// Запрос списка глобальных макросов
+
+var reqmacros = 
+{
+	&quot;jsonrpc&quot;: &quot;2.0&quot;,
+	&quot;method&quot;: &quot;usermacro.get&quot;,
+	&quot;params&quot;: {
+		&quot;output&quot;: &quot;extend&quot;,
+		&quot;globalmacro&quot;: true
+	},
+	&quot;auth&quot;: authtoken,
+	&quot;id&quot;: 1
+}
+
+resp = req.Post(&quot;{$JSONRPC}&quot;, JSON.stringify(reqmacros));
+if (req.Status() == 200) {
+	var jv = JSON.parse(resp);
+	for(item in jv.result) {
+		if (jv.result[item].macro == '{\$HOLIDAY_DATE}')
+			{
+				globalmacroid = jv.result[item].globalmacroid
+				Zabbix.Log(2, 'Old Date value: '+jv.result[item].value)
+			}
+		}
+	if (globalmacroid == -1)
+		return 0;
+}
+else
+{
+	return 0;
+}
+
+// Изменение макроса с датой выходного дня
+
+var changemacros = 
+{   &quot;jsonrpc&quot;: &quot;2.0&quot;,
+    &quot;method&quot;: &quot;usermacro.updateglobal&quot;,
+    &quot;params&quot;: {
+        &quot;globalmacroid&quot;: globalmacroid,
+        &quot;value&quot;: holidaydate
+    },
+    &quot;auth&quot;: authtoken,
+    &quot;id&quot;: 1
+}
+
+resp = req.Post(&quot;{$JSONRPC}&quot;, JSON.stringify(changemacros));
+
+if (req.Status() == 200) {
+   jv = JSON.parse(resp);
+   if (jv.result.globalmacroids.indexOf(globalmacroid) != -1)
+		return 1
+}
+return 0;</params>
+                        </step>
+                    </preprocessing>
+                    <url>{$DATEURL}</url>
+                    <headers>
+                        <header>
+                            <name>Content-Type</name>
+                            <value>application/json</value>
+                        </header>
+                    </headers>
+                </item>
+                <item>
+                    <name>Today is a global holiday</name>
+                    <type>CALCULATED</type>
+                    <key>today.is.a.global.holiday</key>
+                    <history>1d</history>
+                    <trends>0</trends>
+                    <params>date(system.localtime)={$HOLIDAY_DATE}</params>
+                    <applications>
+                        <application>
+                            <name>Holidays</name>
+                        </application>
+                    </applications>
+                    <triggers>
+                        <trigger>
+                            <expression>{last()}=1</expression>
+                            <name>Global Holiday Trigger Activated</name>
+                            <priority>INFO</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+                <item>
+                    <name>Today is a holiday</name>
+                    <type>CALCULATED</type>
+                    <key>today.is.a.holiday</key>
+                    <history>1d</history>
+                    <trends>0</trends>
+                    <params>last(holiday.date.by.http)=date(system.localtime)</params>
+                    <applications>
+                        <application>
+                            <name>Holidays</name>
+                        </application>
+                    </applications>
+                    <triggers>
+                        <trigger>
+                            <expression>{last()}=1</expression>
+                            <name>Local Holiday Trigger Activated</name>
+                            <priority>INFO</priority>
+                        </trigger>
+                    </triggers>
+                </item>
+            </items>
+            <macros>
+                <macro>
+                    <macro>{$DATEURL}</macro>
+                    <value>http://192.168.122.1/date/</value>
+                </macro>
+                <macro>
+                    <macro>{$JSONRPC}</macro>
+                    <value>http://localhost/zabbix/api_jsonrpc.php</value>
+                </macro>
+            </macros>
+        </template>
+    </templates>
+</zabbix_export>
